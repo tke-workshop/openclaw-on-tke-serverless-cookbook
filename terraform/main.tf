@@ -236,7 +236,20 @@ resource "tencentcloud_cam_role_policy_attachment" "tke" {
 
 # 自定义策略：授予 TKE 服务角色 EIP 操作权限（超级节点 Pod 绑定 EIP 所需）
 # 包含 EIP 管理 + Tag 读取（EIP 分配时需查询集群标签）
+
+# 先查询策略是否已存在（可能在之前的 apply 中已创建）
+data "tencentcloud_cam_policies" "tke_eip_existing" {
+  name = "TKEAccessForEIP-${local.uid_suffix}"
+}
+
+locals {
+  tke_eip_policy_exists = length(data.tencentcloud_cam_policies.tke_eip_existing.policy_list) > 0
+  tke_eip_policy_id     = local.tke_eip_policy_exists ? data.tencentcloud_cam_policies.tke_eip_existing.policy_list[0].policy_id : tencentcloud_cam_policy.tke_eip[0].id
+}
+
+# 仅在策略不存在时创建
 resource "tencentcloud_cam_policy" "tke_eip" {
+  count       = local.tke_eip_policy_exists ? 0 : 1
   name        = "TKEAccessForEIP-${local.uid_suffix}"
   description = "允许 TKE 服务角色为超级节点 Pod 分配和管理弹性公网 IP (EIP)，含标签查询权限"
 
@@ -274,13 +287,13 @@ resource "tencentcloud_cam_policy" "tke_eip" {
 # 将 EIP 策略绑定到 TKE_QCSRole（无论角色是新建还是已有）
 resource "tencentcloud_cam_role_policy_attachment" "tke_eip" {
   role_id   = local.tke_role_exists ? data.tencentcloud_cam_roles.tke_existing.role_list[0].role_id : tencentcloud_cam_role.tke[0].id
-  policy_id = tencentcloud_cam_policy.tke_eip.id
+  policy_id = local.tke_eip_policy_id
 }
 
 # 将 EIP 策略同时绑定到 IPAMDofTKE_QCSRole（IPAMD 负责 Pod 网络资源分配，包括 EIP）
 resource "tencentcloud_cam_role_policy_attachment" "ipamd_eip" {
   role_id   = local.ipamd_role_exists ? data.tencentcloud_cam_roles.ipamd_existing.role_list[0].role_id : tencentcloud_cam_role.ipamd[0].id
-  policy_id = tencentcloud_cam_policy.tke_eip.id
+  policy_id = local.tke_eip_policy_id
 }
 
 # ==================== TKE 集群 ====================
