@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "openclaw-cookbook.fullname" . }}-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openclaw-cookbook.labels" . | nindent 4 }}
+data:
+  openclaw.json: |
+    {
+      "meta": {
+        "lastTouchedVersion": "2026.3.2",
+        "lastTouchedAt": "2026-03-05T09:10:55.443Z"
+      },
+      "wizard": {
+        "lastRunAt": "2026-03-05T09:10:55.435Z",
+        "lastRunVersion": "2026.3.2",
+        "lastRunCommand": "onboard",
+        "lastRunMode": "local"
+      },
+      "models": {
+        "mode": "merge",
+        "providers": {
+          {{ .Values.provider.name | quote }}: {
+            "baseUrl": {{ .Values.provider.baseUrl | quote }},
+            "apiKey": "__API_KEY__",
+            "api": {{ .Values.provider.api | quote }},
+            "models": []
+          }
+        }
+      },
+      "agents": {
+        "defaults": {
+          "model": {
+            "primary": {{ printf "%s/%s" .Values.provider.name .Values.provider.defaultModel | quote }}
+          },
+          "workspace": "/home/node/.openclaw/workspace",
+          "compaction": { "mode": "safeguard" },
+          "maxConcurrent": 4,
+          "subagents": { "maxConcurrent": 8 }
+        }
+      },
+      "tools": {
+        "profile": "full"
+      },
+      "messages": {
+        "ackReactionScope": "group-mentions"
+      },
+      "commands": {
+        "native": "auto",
+        "nativeSkills": "auto",
+        "restart": true,
+        "ownerDisplay": "raw"
+      },
+      "session": {
+        "dmScope": "per-channel-peer"
+      },
+      "hooks": {
+        "internal": {
+          "enabled": true,
+          "entries": {
+            "command-logger": { "enabled": true }
+          }
+        }
+      },
+      "gateway": {
+        "port": {{ .Values.gateway.port }},
+        "mode": "local",
+        "bind": "lan",
+        "auth": {
+          "mode": "token",
+          "token": "__GATEWAY_TOKEN__"
+        },
+        "tailscale": {
+          "mode": "off",
+          "resetOnExit": false
+        },
+        "nodes": {
+          "denyCommands": [
+            "camera.snap", "camera.clip", "screen.record",
+            "contacts.add", "calendar.add", "reminders.add", "sms.send"
+          ]
+        }
+      }
+    }

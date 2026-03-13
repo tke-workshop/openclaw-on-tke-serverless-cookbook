@@ -1,0 +1,12 @@
+{{- if .Values.createNamespace | default false }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    {{- include "openclaw-cookbook.labels" . | nindent 4 }}
+    app.kubernetes.io/part-of: openclaw
+    {{- if .Values.istio.enabled }}
+    istio-injection: enabled
+    {{- end }}
+{{- end }}

@@ -1,0 +1,140 @@
+# ====================================================================
+# OpenClaw Cookbook — Minimal Profile
+# 最简部署: 仅基础工作负载 + 安全加固（安全加固始终启用，无开关）
+# ====================================================================
+# 一键部署:
+#   helm install cookbook ./charts/openclaw-cookbook/ \
+#     -f ./charts/openclaw-cookbook/values-minimal.yaml \
+#     --namespace openclaw \
+#     --set secrets.existingSecret=openclaw-secrets
+# ====================================================================
+
+global:
+  governanceMode: cookbook      # cookbook | cloud-gateway（预留）
+  imageRegistry: ""            # 全局镜像仓库前缀（可选）
+
+# ==================== 实例配置 ====================
+instance:
+  owner: ""                    # 实例所有者标签（多实例场景）
+
+# ==================== 基础镜像 ====================
+image:
+  repository: ccr.ccs.tencentyun.com/openclaw-cookbook/openclaw
+  tag: main
+  pullPolicy: IfNotPresent
+
+imagePullSecrets: []
+
+# ==================== 资源规格 ====================
+resources:
+  requests:
+    cpu: 500m
+    memory: 512Mi
+  limits:
+    cpu: "2"
+    memory: 2Gi
+
+# ==================== 网络 ====================
+eip:
+  enabled: true
+  bandwidthOut: 10              # 出带宽上限 (Mbps)
+  chargeType: TRAFFIC_POSTPAID_BY_HOUR  # 按流量计费
+
+service:
+  type: ClusterIP
+  port: 20000
+  annotations: {}
+
+# ==================== Secret（API Keys）====================
+# 方式一（推荐）: 引用已存在的 Secret
+#   secrets:
+#     existingSecret: "my-secrets"
+#
+# 方式二: 直接在 values 中设置（仅测试用）
+#   secrets:
+#     env:
+#       API_KEY: "sk-or-v1-xxx"
+secrets:
+  existingSecret: ""
+  env: {}
+  placeholders:
+    API_KEY: "__API_KEY__"
+    GATEWAY_TOKEN: "__GATEWAY_TOKEN__"
+
+# ==================== AI Provider ====================
+# 默认使用 OpenRouter（兼容 OpenAI 协议的聚合网关）
+# 切换 provider 示例:
+#   --set provider.name=openai --set provider.baseUrl=https://api.openai.com/v1 --set provider.defaultModel=gpt-4o
+#   --set provider.name=anthropic --set provider.baseUrl=https://api.anthropic.com/v1 --set provider.api=anthropic-messages --set provider.defaultModel=claude-sonnet-4-20250514
+provider:
+  name: openrouter
+  baseUrl: "https://openrouter.ai/api/v1"
+  api: openai-completions            # openai-completions | anthropic-messages | google-generative-ai
+  defaultModel: "z-ai/glm-5"        # provider 下的模型 ID
+
+gateway:
+  port: 20000
+  authToken: ""  # Gateway 认证 token，为空时自动生成
+
+# ==================== 第一层: 平台能力 ====================
+
+imageCache:
+  enabled: false
+
+storage:
+  storageClass: cbs
+  size: 10Gi
+
+dataPersistence:
+  enabled: false
+
+securityGroup:
+  enabled: false
+  ids: []
+
+networkPolicy:
+  enabled: false
+
+gatekeeper:
+  enabled: false
+
+hibernate:
+  enabled: false
+
+# ==================== 第二层: 治理能力 ====================
+
+istio:
+  enabled: false
+  install:
+    enabled: false
+    version: "1.24.6"
+    image: "ccr.ccs.tencentyun.com/openclaw-cookbook/helm:3.17.1"
+    uninstallOnDelete: false
+    pilot:
+      resources:
+        requests:
+          cpu: 100m
+          memory: 512Mi
+        limits:
+          cpu: 500m
+          memory: 1Gi
+    meshConfig:
+      outboundTrafficPolicy: ALLOW_ANY
+      accessLogFile: ""
+      accessLogEncoding: TEXT
+      holdApplicationUntilProxyStarts: false
+
+egressPolicy:
+  enabled: false
+  allowlist: []
+  circuitBreaker:
+    enabled: true
+    maxConnections: 100
+    connectTimeout: 10s
+    consecutive5xxErrors: 3
+    interval: 30s
+    baseEjectionTime: 60s
+
+# --- CLS 日志（预留）---
+cls:
+  enabled: false

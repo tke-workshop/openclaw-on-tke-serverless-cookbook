@@ -1,0 +1,28 @@
+{{- if and .Values.istio.enabled .Values.egressPolicy.enabled (or .Values.istio.install.enabled (.Capabilities.APIVersions.Has "networking.istio.io/v1beta1")) }}
+{{- range .Values.egressPolicy.allowlist }}
+---
+# ServiceEntry — 出站白名单: {{ . }}
+# 在 REGISTRY_ONLY 模式下注册合法的外部域名，允许 Pod 访问。
+apiVersion: networking.istio.io/v1beta1
+kind: ServiceEntry
+metadata:
+  name: {{ $.Release.Name }}-{{ . | replace "." "-" }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "openclaw-cookbook.labels" $ | nindent 4 }}
+  {{- if $.Values.istio.install.enabled }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+  {{- end }}
+spec:
+  hosts:
+    - {{ . }}
+  ports:
+    - number: 443
+      name: https
+      protocol: TLS
+  location: MESH_EXTERNAL
+  resolution: DNS
+{{- end }}
+{{- end }}

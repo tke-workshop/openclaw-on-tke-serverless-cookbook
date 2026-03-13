@@ -1,0 +1,185 @@
+{{- if .Values.istio.install.enabled }}
+---
+# ServiceAccount — Istio Bootstrap Job
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "openclaw-cookbook.fullname" . }}-istio-bootstrap
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openclaw-cookbook.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+# ClusterRole — Istio Bootstrap（需要集群级别权限安装 CRD + istiod）
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "openclaw-cookbook.fullname" . }}-istio-bootstrap
+  labels:
+    {{- include "openclaw-cookbook.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+# ClusterRoleBinding — Istio Bootstrap
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "openclaw-cookbook.fullname" . }}-istio-bootstrap
+  labels:
+    {{- include "openclaw-cookbook.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "openclaw-cookbook.fullname" . }}-istio-bootstrap
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "openclaw-cookbook.fullname" . }}-istio-bootstrap
+    namespace: {{ .Release.Namespace }}
+---
+# ConfigMap — istiod 安装参数（YAML values 文件）
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "openclaw-cookbook.fullname" . }}-istio-values
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openclaw-cookbook.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+data:
+  istiod-values.yaml: |
+    pilot:
+      resources:
+        requests:
+          cpu: {{ .Values.istio.install.pilot.resources.requests.cpu | default "100m" }}
+          memory: {{ .Values.istio.install.pilot.resources.requests.memory | default "512Mi" }}
+        limits:
+          cpu: {{ .Values.istio.install.pilot.resources.limits.cpu | default "500m" }}
+          memory: {{ .Values.istio.install.pilot.resources.limits.memory | default "1Gi" }}
+    meshConfig:
+      outboundTrafficPolicy:
+        mode: {{ .Values.istio.install.meshConfig.outboundTrafficPolicy | default "ALLOW_ANY" }}
+      accessLogFile: {{ .Values.istio.install.meshConfig.accessLogFile | default "" | quote }}
+      accessLogEncoding: {{ .Values.istio.install.meshConfig.accessLogEncoding | default "TEXT" }}
+      defaultConfig:
+        holdApplicationUntilProxyStarts: {{ .Values.istio.install.meshConfig.holdApplicationUntilProxyStarts | default false }}
+---
+# Job — 安装 Istio 控制面（pre-install / pre-upgrade hook）
+# 幂等：已安装则 upgrade，未安装则 install
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "openclaw-cookbook.fullname" . }}-istio-bootstrap
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openclaw-cookbook.labels" . | nindent 4 }}
+    app.kubernetes.io/component: istio-bootstrap
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "openclaw-cookbook.name" . }}-istio-bootstrap
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        {{- if .Values.eip.enabled }}
+        eks.tke.cloud.tencent.com/eip-attributes: '{"InternetMaxBandwidthOut":{{ .Values.eip.bandwidthOut }},"InternetChargeType":"{{ .Values.eip.chargeType }}"}'
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "openclaw-cookbook.fullname" . }}-istio-bootstrap
+      restartPolicy: OnFailure
+      containers:
+        - name: istio-bootstrap
+          image: {{ .Values.istio.install.image | default "ccr.ccs.tencentyun.com/openclaw-cookbook/helm:3.17.1" }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              set -e
+              echo "=== Istio Bootstrap Start ==="
+
+              ISTIO_VERSION="{{ .Values.istio.install.version | default "1.24.6" }}"
+              ISTIO_NS="istio-system"
+              TARGET_NS="{{ .Release.Namespace }}"
+
+              # 添加 Istio Helm 仓库
+              helm repo add istio https://istio-release.storage.googleapis.com/charts
+              helm repo update istio
+
+              # ---------- istio-base（CRD + 集群资源）----------
+              if helm status istio-base -n ${ISTIO_NS} >/dev/null 2>&1; then
+                echo "[istio-base] already installed, upgrading..."
+                helm upgrade istio-base istio/base \
+                  --namespace ${ISTIO_NS} \
+                  --version ${ISTIO_VERSION} \
+                  --wait --timeout 2m
+              else
+                echo "[istio-base] installing..."
+                helm install istio-base istio/base \
+                  --namespace ${ISTIO_NS} \
+                  --create-namespace \
+                  --version ${ISTIO_VERSION} \
+                  --wait --timeout 2m
+              fi
+              echo "[istio-base] done ✓"
+
+              # ---------- istiod（控制面）----------
+              if helm status istiod -n ${ISTIO_NS} >/dev/null 2>&1; then
+                echo "[istiod] already installed, upgrading..."
+                helm upgrade istiod istio/istiod \
+                  --namespace ${ISTIO_NS} \
+                  --version ${ISTIO_VERSION} \
+                  -f /config/istiod-values.yaml \
+                  --wait --timeout 5m
+              else
+                echo "[istiod] installing..."
+                helm install istiod istio/istiod \
+                  --namespace ${ISTIO_NS} \
+                  --version ${ISTIO_VERSION} \
+                  -f /config/istiod-values.yaml \
+                  --wait --timeout 5m
+              fi
+              echo "[istiod] done ✓"
+
+              # ---------- 给目标 namespace 启用 sidecar 注入 ----------
+              echo "Labeling namespace ${TARGET_NS} for sidecar injection..."
+              kubectl label namespace ${TARGET_NS} istio-injection=enabled --overwrite 2>/dev/null || true
+              echo "[namespace label] done ✓"
+
+              echo "=== Istio Bootstrap Complete ==="
+          volumeMounts:
+            - name: istio-values
+              mountPath: /config
+              readOnly: true
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+      volumes:
+        - name: istio-values
+          configMap:
+            name: {{ include "openclaw-cookbook.fullname" . }}-istio-values
+{{- end }}

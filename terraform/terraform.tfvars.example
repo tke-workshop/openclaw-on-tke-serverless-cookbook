@@ -1,0 +1,43 @@
+# OpenClaw Cookbook — Terraform 变量示例文件
+#
+# 使用方法:
+#   cp terraform.tfvars.example terraform.tfvars
+#   # 按需修改变量值
+#   terraform apply
+#
+# 注意: terraform.tfvars 不应提交到版本控制
+
+# ==================== 区域配置 ====================
+# 腾讯云区域（默认广州）
+# region = "ap-guangzhou"
+
+# 可用区（默认广州六区）
+# availability_zone = "ap-guangzhou-6"
+
+# ==================== 网络配置 ====================
+# VPC CIDR（确保不与已有 VPC 冲突）
+# vpc_cidr = "10.0.0.0/16"
+
+# 子网 CIDR（必须在 VPC CIDR 范围内）
+# subnet_cidr = "10.0.1.0/24"
+
+# Service CIDR
+# service_cidr = "172.19.128.0/17"
+
+# ==================== 集群配置 ====================
+# 集群名称前缀（实际名称会追加 UID 后缀）
+# cluster_name = "openclaw-cookbook"
+
+# Kubernetes 版本
+# cluster_version = "1.30.1"
+
+# ==================== 安全组配置 ====================
+# Cookbook 服务端口（安全组入站放行）
+# cookbook_service_port = 31234
+
+# ==================== 标签 ====================
+# tags = {
+#   "project"     = "openclaw-cookbook"
+#   "managed-by"  = "terraform"
+#   "environment" = "quickstart"
+# }

@@ -1,0 +1,123 @@
+{{- if and .Values.istio.install.enabled .Values.istio.install.uninstallOnDelete }}
+---
+# ServiceAccount — Istio Cleanup Job
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "openclaw-cookbook.fullname" . }}-istio-cleanup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openclaw-cookbook.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "openclaw-cookbook.fullname" . }}-istio-cleanup
+  labels:
+    {{- include "openclaw-cookbook.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+rules:
+  - apiGroups: ["*"]
+    resources: ["*"]
+    verbs: ["*"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "openclaw-cookbook.fullname" . }}-istio-cleanup
+  labels:
+    {{- include "openclaw-cookbook.labels" . | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "openclaw-cookbook.fullname" . }}-istio-cleanup
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "openclaw-cookbook.fullname" . }}-istio-cleanup
+    namespace: {{ .Release.Namespace }}
+---
+# Job — 卸载 Istio 控制面（post-delete hook）
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "openclaw-cookbook.fullname" . }}-istio-cleanup
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openclaw-cookbook.labels" . | nindent 4 }}
+    app.kubernetes.io/component: istio-cleanup
+  annotations:
+    "helm.sh/hook": post-delete
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "openclaw-cookbook.name" . }}-istio-cleanup
+        app.kubernetes.io/instance: {{ .Release.Name }}
+      annotations:
+        {{- if .Values.eip.enabled }}
+        eks.tke.cloud.tencent.com/eip-attributes: '{"InternetMaxBandwidthOut":{{ .Values.eip.bandwidthOut }},"InternetChargeType":"{{ .Values.eip.chargeType }}"}'
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "openclaw-cookbook.fullname" . }}-istio-cleanup
+      restartPolicy: OnFailure
+      containers:
+        - name: istio-cleanup
+          image: {{ .Values.istio.install.image | default "ccr.ccs.tencentyun.com/openclaw-cookbook/helm:3.17.1" }}
+          command:
+            - /bin/sh
+            - -ec
+            - |
+              set -e
+              echo "=== Istio Cleanup Start ==="
+
+              ISTIO_NS="istio-system"
+
+              # 卸载 istiod
+              if helm status istiod -n ${ISTIO_NS} >/dev/null 2>&1; then
+                echo "[istiod] uninstalling..."
+                helm uninstall istiod -n ${ISTIO_NS} --wait --timeout 3m
+                echo "[istiod] removed ✓"
+              else
+                echo "[istiod] not found, skip"
+              fi
+
+              # 卸载 istio-base
+              if helm status istio-base -n ${ISTIO_NS} >/dev/null 2>&1; then
+                echo "[istio-base] uninstalling..."
+                helm uninstall istio-base -n ${ISTIO_NS} --wait --timeout 2m
+                echo "[istio-base] removed ✓"
+              else
+                echo "[istio-base] not found, skip"
+              fi
+
+              # 清理 namespace（可选）
+              if kubectl get namespace ${ISTIO_NS} >/dev/null 2>&1; then
+                echo "[namespace] deleting ${ISTIO_NS}..."
+                kubectl delete namespace ${ISTIO_NS} --timeout=60s || true
+                echo "[namespace] removed ✓"
+              fi
+
+              echo "=== Istio Cleanup Complete ==="
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+{{- end }}

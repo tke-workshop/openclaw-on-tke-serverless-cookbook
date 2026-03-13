@@ -1,0 +1,14 @@
+apiVersion: v2
+name: openclaw-cookbook
+description: >-
+  OpenClaw on TKE Serverless — 企业级部署 Cookbook.
+  第一层: 平台能力(安全加固/存储/镜像缓存/休眠).
+  第二层: AI Agent 治理(Istio/出站白名单/熔断保护).
+type: application
+version: 0.3.0
+appVersion: "1.0.0"
+
+# ==================== Istio 控制面 ====================
+# 方式一（推荐）: 设置 istio.install.enabled=true，Chart 通过
+#   pre-install hook 自动安装 istio-base + istiod 到 istio-system
+# 方式二: 手动安装 Istio 后，仅设置 istio.enabled=true 启用治理策略

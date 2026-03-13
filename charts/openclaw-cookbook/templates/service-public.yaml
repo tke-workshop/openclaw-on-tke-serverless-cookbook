@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openclaw-cookbook.fullname" . }}-public
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openclaw-cookbook.labels" . | nindent 4 }}
+  annotations:
+    {{- if eq .Values.service.type "LoadBalancer" }}
+    # TKE: CLB 直连 Pod ENI（不走 NodePort）
+    service.cloud.tencent.com/direct-access: "true"
+    service.kubernetes.io/qcloud-loadbalancer-backend-service-type: "eni"
+    {{- end }}
+    {{- with .Values.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    {{- include "openclaw-cookbook.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: gateway
+      port: {{ .Values.service.port }}
+      targetPort: gateway
+      protocol: TCP

@@ -1,0 +1,125 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "openclaw-cookbook.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openclaw-cookbook.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "openclaw-cookbook.fullname" . }}-headless
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "openclaw-cookbook.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openclaw-cookbook.selectorLabels" . | nindent 8 }}
+        {{- if .Values.istio.enabled }}
+        sidecar.istio.io/inject: "true"
+        {{- end }}
+      annotations:
+        {{- if .Values.eip.enabled }}
+        eks.tke.cloud.tencent.com/eip-attributes: '{"InternetMaxBandwidthOut":{{ .Values.eip.bandwidthOut }},"InternetChargeType":"{{ .Values.eip.chargeType }}"}'
+        {{- end }}
+        {{- if .Values.imageCache.enabled }}
+        eks.tke.cloud.tencent.com/use-image-cache: "auto"
+        {{- end }}
+        {{- if .Values.dataPersistence.enabled }}
+        eks.tke.cloud.tencent.com/container-data-persist-duration: {{ .Values.dataPersistence.duration | quote }}
+        eks.tke.cloud.tencent.com/pod-resource: '{"disk":{"size":{{ .Values.dataPersistence.disk.size }},"type":"{{ .Values.dataPersistence.disk.type }}"}}'
+        {{- end }}
+        {{- if .Values.securityGroup.enabled }}
+        eks.tke.cloud.tencent.com/security-group-id: {{ .Values.securityGroup.ids | join "," | quote }}
+        {{- end }}
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: init-config
+          image: busybox:1.36
+          command:
+            - sh
+            - -c
+            - |
+              chown -R 1000:1000 /data
+              {{- $configFile := "/config/openclaw.json" }}
+              {{- $dataFile := "/data/openclaw.json" }}
+              cp {{ $configFile }} {{ $dataFile }}
+              {{- range $envKey, $placeholder := .Values.secrets.placeholders }}
+              sed -i "s|{{ $placeholder }}|${{ $envKey }}|g" {{ $dataFile }}
+              {{- end }}
+              chown 1000:1000 {{ $dataFile }}
+          securityContext:
+            runAsUser: 0
+          envFrom:
+            - secretRef:
+                name: {{ .Values.secrets.existingSecret | default (printf "%s-secrets" (include "openclaw-cookbook.fullname" .)) }}
+          volumeMounts:
+            - name: openclaw-config
+              mountPath: /config
+              readOnly: true
+            - name: openclaw-data
+              mountPath: /data
+      containers:
+        - name: openclaw
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: gateway
+              containerPort: {{ .Values.gateway.port }}
+              protocol: TCP
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: openclaw-data
+              mountPath: /home/node/.openclaw
+          # startupProbe: 启动期间允许最多 300 秒（10s × 30 次），期间 liveness 不生效
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: gateway
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: gateway
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: gateway
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+      volumes:
+        - name: openclaw-config
+          configMap:
+            name: {{ include "openclaw-cookbook.fullname" . }}-config
+  volumeClaimTemplates:
+    - metadata:
+        name: openclaw-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.storage.storageClass }}
+        resources:
+          requests:
+            storage: {{ .Values.storage.size }}

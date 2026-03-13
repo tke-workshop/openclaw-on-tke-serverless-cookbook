@@ -1,0 +1,29 @@
+{{- if and .Values.istio.enabled .Values.egressPolicy.enabled .Values.egressPolicy.circuitBreaker.enabled (or .Values.istio.install.enabled (.Capabilities.APIVersions.Has "networking.istio.io/v1beta1")) }}
+{{- range .Values.egressPolicy.allowlist }}
+---
+# DestinationRule — 连接池 + 熔断: {{ . }}
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: {{ $.Release.Name }}-{{ . | replace "." "-" }}-dr
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "openclaw-cookbook.labels" $ | nindent 4 }}
+  {{- if $.Values.istio.install.enabled }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade
+    "helm.sh/hook-weight": "5"
+  {{- end }}
+spec:
+  host: {{ . }}
+  trafficPolicy:
+    connectionPool:
+      tcp:
+        maxConnections: {{ $.Values.egressPolicy.circuitBreaker.maxConnections }}
+        connectTimeout: {{ $.Values.egressPolicy.circuitBreaker.connectTimeout }}
+    outlierDetection:
+      consecutive5xxErrors: {{ $.Values.egressPolicy.circuitBreaker.consecutive5xxErrors }}
+      interval: {{ $.Values.egressPolicy.circuitBreaker.interval }}
+      baseEjectionTime: {{ $.Values.egressPolicy.circuitBreaker.baseEjectionTime }}
+{{- end }}
+{{- end }}

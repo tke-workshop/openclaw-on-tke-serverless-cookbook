@@ -1,0 +1,15 @@
+# Terraform 本地文件
+.terraform/
+.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# 敏感变量文件（不要提交真实凭证）
+terraform.tfvars
+*.auto.tfvars
+
+# 输出的 kubeconfig
+kubeconfig
+*.kubeconfig

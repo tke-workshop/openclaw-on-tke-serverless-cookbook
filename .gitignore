@@ -1,0 +1,38 @@
+# ==================== Terraform ====================
+# 本地状态文件（含敏感信息，绝对不能提交）
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/crash.log
+terraform/crash.*.log
+
+# 敏感变量文件
+terraform/terraform.tfvars
+terraform/*.auto.tfvars
+
+# 导出的 kubeconfig
+terraform/kubeconfig
+terraform/*.kubeconfig
+
+# ==================== Kubernetes ====================
+*.kubeconfig
+kubeconfig
+
+# ==================== Helm ====================
+charts/openclaw-cookbook/charts/*.tgz
+
+# ==================== IDE / 编辑器 ====================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# ==================== 系统文件 ====================
+Thumbs.db
+.DS_Store
+
+# ==================== 项目数据 ====================
+.codebuddy/
