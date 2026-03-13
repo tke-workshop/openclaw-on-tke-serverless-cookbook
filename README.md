@@ -111,7 +111,7 @@ openclaw-on-tencentcloud-tke-serverless-cookbook/
 ### 步骤一：克隆仓库
 
 ```bash
-git clone https://github.com/your-org/openclaw-on-tencentcloud-tke-serverless-cookbook.git
+git clone https://github.com/tke-workshop/openclaw-on-tencentcloud-tke-serverless-cookbook.git
 cd openclaw-on-tencentcloud-tke-serverless-cookbook
 ```
 
