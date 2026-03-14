@@ -1,7 +1,7 @@
 <p align="center">
   <h1 align="center">🦞 OpenClaw on TKE Serverless Cookbook</h1>
   <p align="center">
-    <strong>在腾讯云 TKE Serverless 上一键部署 OpenClaw AI Agent 网关</strong>
+    <strong>在腾讯云 TKE Serverless 上一键部署 OpenClaw AI Agent</strong>
   </p>
   <p align="center">
     <a href="#-5-分钟快速体验">快速体验</a> ·
@@ -17,7 +17,7 @@
 
 ## 📖 这是什么？
 
-这是一份 **开箱即用的部署指南（Cookbook）**，帮助你在 [腾讯云 TKE Serverless](https://cloud.tencent.com/product/tke) 上快速部署 [OpenClaw](https://github.com/openclaw) —— 一个 AI Agent 网关。
+这是一份 **开箱即用的部署指南（Cookbook）**，帮助你在 [腾讯云 TKE Serverless](https://cloud.tencent.com/product/tkeserverless) 上快速部署 [OpenClaw](https://github.com/openclaw)。
 
 **你不需要是 Kubernetes 专家**，只需要按照本指南的步骤操作，就能在 5 分钟内完成从零到部署的全过程。
 
@@ -51,26 +51,42 @@ openclaw-on-tencentcloud-tke-serverless-cookbook/
 
 ## 🏗️ 架构总览
 
-```
-                         ┌─────────────────────────────────────────────────────┐
-                         │              腾讯云 TKE Serverless 集群               │
-                         │                                                     │
-┌──────────┐  Terraform  │  ┌──────────┐   ┌───────────────────────────────┐   │
-│ 开发者    │────────────▶│  │ VPC      │   │  超级节点池（无需管理服务器）    │   │
-│ 笔记本    │             │  │ + 子网    │   │                               │   │
-└──────────┘             │  │ + 安全组  │   │  ┌─────────────────────────┐  │   │
-     │                   │  └──────────┘   │  │  OpenClaw Pod           │  │   │
-     │  Helm             │                 │  │  ┌──────────┐ ┌──────┐  │  │   │
-     └──────────────────▶│                 │  │  │ OpenClaw │ │ EIP  │──┼──┼───┼──▶ 公网
-                         │                 │  │  │ Gateway  │ │ 公网IP│  │  │   │
-                         │                 │  │  └──────────┘ └──────┘  │  │   │
-                         │                 │  │  ┌──────────┐           │  │   │
-                         │                 │  │  │ CBS 云盘  │           │  │   │
-                         │                 │  │  │ 持久化存储 │           │  │   │
-                         │                 │  │  └──────────┘           │  │   │
-                         │                 │  └─────────────────────────┘  │   │
-                         │                 └───────────────────────────────┘   │
-                         └─────────────────────────────────────────────────────┘
+```mermaid
+graph LR
+  subgraph 开发者
+    Dev["🧑‍💻 cookbook"]
+    Browser["🌐 浏览器"]
+  end
+
+  subgraph TKE["☁️ 腾讯云 TKE Serverless 集群"]
+    subgraph IS["istio-system"]
+      Istiod["istiod<br/>控制面"]
+    end
+    subgraph VPC["VPC + 子网 + 安全组"]
+      CLB["CLB<br/>负载均衡<br/>:443"]
+      subgraph Pool["超级节点池"]
+        subgraph Pod["OpenClaw Pod"]
+          Envoy["Envoy<br/>Sidecar"]
+          Nginx["Nginx<br/>TLS 终止"]
+          Gateway["OpenClaw<br/>Gateway<br/>:20000"]
+          CBS["CBS 云盘<br/>持久化存储"]
+        end
+      end
+    end
+  end
+
+  subgraph LLM["☁️ LLM API"]
+    API["OpenRouter / OpenAI<br/>Anthropic ..."]
+  end
+
+  Dev -- "Terraform" --> VPC
+  Dev -- "Helm" --> TKE
+  Browser -- "HTTPS" --> CLB
+  CLB --> Nginx
+  Nginx --> Gateway
+  Gateway --> Envoy
+  Envoy -- "出站白名单" --> API
+  Istiod -. "xDS 策略推送" .-> Envoy
 ```
 
 **两步部署**：
@@ -159,39 +175,32 @@ eklet-subnet-xxxxxxx   Ready    agent   1m    v1.34.1-eks.1
 # 回到项目根目录
 cd ..
 
-# 1. 创建命名空间
-kubectl create namespace openclaw
-
-# 2. 创建 API Key Secret（替换为你的真实 Key）
-kubectl create secret generic openclaw-secrets \
-  --from-literal=OPENROUTER_API_KEY="sk-or-v1-你的OpenRouter密钥" \
-  --from-literal=OPENAI_API_KEY="sk-你的OpenAI密钥" \
-  --from-literal=ANTHROPIC_API_KEY="sk-ant-你的Anthropic密钥" \
-  -n openclaw
-
-# 3. 部署 OpenClaw（默认配置，适合个人体验）
+# 部署（以 OpenAI 为例，替换为你的真实 Key）
 helm install cookbook ./charts/openclaw-cookbook/ \
-  --namespace openclaw \
-  --set secrets.existingSecret=openclaw-secrets
+  -f ./charts/openclaw-cookbook/values-minimal.yaml \
+  --namespace openclaw --create-namespace \
+  --set provider.name=openai \
+  --set provider.baseUrl=https://api.openai.com/v1 \
+  --set secrets.env.API_KEY=sk-proj-xxx \
+  --set provider.defaultModel=gpt-4o \
+  --set gateway.authToken=your-gateway-token 
 
-# 4. 等待 Pod 就绪（通常 1-2 分钟）
+# 等待 Pod 就绪（通常 1-2 分钟）
 kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cookbook \
   -n openclaw --timeout=180s
 ```
 
-### 步骤五：验证部署
+> 💡 更多 Provider 示例见 [Helm Chart README](./charts/openclaw-cookbook/README.md)。
+
+### 步骤五：访问 OpenClaw
 
 ```bash
-# 查看服务状态
-kubectl get pods,svc -n openclaw
-
-# 如果使用默认 Profile（含 EIP），获取公网 IP：
-kubectl get svc -n openclaw -l app.kubernetes.io/instance=cookbook
-# 在 EXTERNAL-IP 列可以看到公网地址
-
-# 健康检查
-curl http://<EXTERNAL-IP>:31234/healthz
+echo "https://$(kubectl get svc -n openclaw --field-selector spec.type=LoadBalancer \
+  -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')"
 ```
+
+在浏览器中打开输出的地址（自签名证书，需点击"继续访问"），
+输入你部署时设置的登录密码即可连接。
 
 ### 🎉 完成！
 
@@ -235,6 +244,7 @@ helm install cookbook ./charts/openclaw-cookbook/ \
 | 特性 | 状态 |
 |------|------|
 | OpenClaw 网关 | ✅ 启用 |
+| Nginx HTTPS 反向代理 | ✅ 启用（自签名证书，自动 TLS 终止） |
 | 安全加固 | ✅ 启用 |
 | Istio 服务网格（自动安装） | ✅ 启用 |
 | 出站白名单（仅允许访问指定 LLM API） | ✅ 启用 |
@@ -254,13 +264,14 @@ helm install cookbook ./charts/openclaw-cookbook/ \
 | 特性 | 状态 |
 |------|------|
 | OpenClaw 网关 | ✅ 启用 |
+| Nginx HTTPS 反向代理 | ✅ 启用（自签名证书，自动 TLS 终止） |
 | 安全加固（非 root 运行） | ✅ 启用 |
-| EIP 公网 IP | ❌ 关闭 |
+| EIP 公网 IP | ✅ 启用 |
 | 镜像缓存 | ❌ 关闭 |
 | 数据持久化 | ❌ 关闭 |
 | Istio 服务治理 | ❌ 关闭 |
 
-> 💡 最简模式通过 ClusterIP + kubectl port-forward 访问，适合快速体验和开发调试。
+> 💡 最简模式关闭了 Istio 和数据持久化等高级功能，但仍然通过公网 HTTPS 直接访问，适合快速体验。
 
 ---
 
@@ -307,8 +318,12 @@ cp terraform.tfvars.example terraform.tfvars
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `image.tag` | `latest` | 镜像版本 |
-| `eip.enabled` | `false` | 是否绑定公网 EIP |
-| `service.type` | `ClusterIP` | Service 类型 |
+| `eip.enabled` | `true` | 是否绑定公网 EIP |
+| `service.type` | `LoadBalancer` | Service 类型 |
+| `nginx.enabled` | `true` | 启用 Nginx HTTPS 反向代理 sidecar |
+| `nginx.tls.autoGenerate` | `true` | 自动生成自签名证书 |
+| `nginx.tls.existingSecret` | `""` | 引用已有 TLS Secret（生产环境推荐） |
+| `gateway.authToken` | `""` | Gateway 登录 Token（为空时自动生成随机值） |
 | `storage.size` | `10Gi` | 持久化存储大小 |
 | `resources.limits.cpu` | `2` | CPU 上限 |
 | `resources.limits.memory` | `2Gi` | 内存上限 |
@@ -407,14 +422,16 @@ kubectl describe pod <pod-name> -n openclaw
 <details>
 <summary><strong>Q: 如何访问部署好的 OpenClaw？</strong></summary>
 
-取决于你使用的部署模式：
+```bash
+echo "https://$(kubectl get svc -n openclaw --field-selector spec.type=LoadBalancer \
+  -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')"
+```
 
-- **默认模式**（有 EIP）：通过 `kubectl get svc -n openclaw` 获取 EXTERNAL-IP，直接访问
-- **最简模式**（无 EIP）：使用 port-forward 转发到本地
-  ```bash
-  kubectl port-forward svc/cookbook-openclaw-cookbook 31234:31234 -n openclaw
-  # 然后访问 http://localhost:31234
-  ```
+在浏览器中打开输出的地址，输入你部署时设置的登录密码即可连接。
+
+> ⚠️ 默认使用自签名证书，浏览器会提示"不安全"，点击"继续访问"即可。
+> 生产环境建议通过 `nginx.tls.existingSecret` 配置正式证书。
+
 </details>
 
 ---

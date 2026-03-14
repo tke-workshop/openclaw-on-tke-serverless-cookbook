@@ -121,10 +121,30 @@ spec:
               ISTIO_VERSION="{{ .Values.istio.install.version | default "1.24.6" }}"
               ISTIO_NS="istio-system"
               TARGET_NS="{{ .Release.Namespace }}"
+              MAX_RETRIES={{ .Values.istio.install.repoRetries | default 5 }}
+              RETRY_DELAY={{ .Values.istio.install.repoRetryDelay | default 10 }}
 
-              # 添加 Istio Helm 仓库
-              helm repo add istio https://istio-release.storage.googleapis.com/charts
-              helm repo update istio
+              # 带重试的命令执行函数
+              retry() {
+                local desc="$1"; shift
+                local attempt=1
+                while [ ${attempt} -le ${MAX_RETRIES} ]; do
+                  echo "[${desc}] attempt ${attempt}/${MAX_RETRIES}..."
+                  if "$@"; then
+                    echo "[${desc}] succeeded ✓"
+                    return 0
+                  fi
+                  echo "[${desc}] failed, retrying in ${RETRY_DELAY}s..."
+                  sleep ${RETRY_DELAY}
+                  attempt=$((attempt + 1))
+                done
+                echo "[${desc}] all ${MAX_RETRIES} attempts failed ✗"
+                return 1
+              }
+
+              # 添加 Istio Helm 仓库（带重试，解决 googleapis 偶现 EOF）
+              retry "helm repo add" helm repo add istio https://istio-release.storage.googleapis.com/charts
+              retry "helm repo update" helm repo update istio
 
               # ---------- istio-base（CRD + 集群资源）----------
               if helm status istio-base -n ${ISTIO_NS} >/dev/null 2>&1; then

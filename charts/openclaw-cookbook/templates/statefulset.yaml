@@ -86,34 +86,113 @@ spec:
               mountPath: /home/node/.openclaw
           # startupProbe: 启动期间允许最多 300 秒（10s × 30 次），期间 liveness 不生效
           startupProbe:
+            {{- if .Values.nginx.enabled }}
+            # Gateway bind=loopback 时，通过 Nginx 反向代理间接探测
+            httpGet:
+              path: /healthz
+              port: {{ .Values.nginx.httpsPort }}
+              scheme: HTTPS
+            {{- else }}
             httpGet:
               path: /healthz
               port: gateway
+            {{- end }}
             initialDelaySeconds: 10
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 30
           livenessProbe:
+            {{- if .Values.nginx.enabled }}
+            httpGet:
+              path: /healthz
+              port: {{ .Values.nginx.httpsPort }}
+              scheme: HTTPS
+            {{- else }}
             httpGet:
               path: /healthz
               port: gateway
+            {{- end }}
             periodSeconds: 15
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
+            {{- if .Values.nginx.enabled }}
+            httpGet:
+              path: /healthz
+              port: {{ .Values.nginx.httpsPort }}
+              scheme: HTTPS
+            {{- else }}
             httpGet:
               path: /healthz
               port: gateway
+            {{- end }}
             initialDelaySeconds: 5
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+        {{- if .Values.nginx.enabled }}
+        # ---- Nginx HTTPS 反向代理 Sidecar ----
+        # OpenClaw Web Crypto API 强制要求 HTTPS 或 localhost，
+        # 通过 Nginx 提供 TLS 终止 + WebSocket 协议升级。
+        - name: nginx
+          image: "{{ .Values.nginx.image.repository }}:{{ .Values.nginx.image.tag }}"
+          imagePullPolicy: {{ .Values.nginx.image.pullPolicy }}
+          ports:
+            - name: https
+              containerPort: {{ .Values.nginx.httpsPort }}
+              protocol: TCP
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          securityContext:
+            runAsNonRoot: false       # Nginx 需要 root 启动（绑定特权端口 + worker 进程管理）
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_BIND_SERVICE    # 绑定 443/80 特权端口
+                - CHOWN               # 启动时 chown cache 目录
+                - SETUID              # master→worker 进程降权
+                - SETGID              # master→worker 进程降权
+          volumeMounts:
+            - name: nginx-config
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+            - name: nginx-tls
+              mountPath: /etc/nginx/ssl
+              readOnly: true
+          livenessProbe:
+            tcpSocket:
+              port: https
+            periodSeconds: 15
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            tcpSocket:
+              port: https
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.nginx.resources | nindent 12 }}
+        {{- end }}
       volumes:
         - name: openclaw-config
           configMap:
             name: {{ include "openclaw-cookbook.fullname" . }}-config
+        {{- if .Values.nginx.enabled }}
+        - name: nginx-config
+          configMap:
+            name: {{ include "openclaw-cookbook.fullname" . }}-nginx
+        - name: nginx-tls
+          secret:
+            secretName: {{ .Values.nginx.tls.existingSecret | default (printf "%s-tls" (include "openclaw-cookbook.fullname" .)) }}
+        {{- end }}
   volumeClaimTemplates:
     - metadata:
         name: openclaw-data

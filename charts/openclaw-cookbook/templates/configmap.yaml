@@ -66,7 +66,16 @@ data:
       "gateway": {
         "port": {{ .Values.gateway.port }},
         "mode": "local",
+        {{- if .Values.nginx.enabled }}
+        "bind": "loopback",
+        "trustedProxies": ["127.0.0.1", "::1"],
+        "controlUi": {
+          "allowedOrigins": ["*"],
+          "dangerouslyDisableDeviceAuth": true
+        },
+        {{- else }}
         "bind": "lan",
+        {{- end }}
         "auth": {
           "mode": "token",
           "token": "__GATEWAY_TOKEN__"

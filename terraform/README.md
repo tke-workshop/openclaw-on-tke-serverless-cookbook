@@ -7,7 +7,6 @@
 1. **Terraform** >= 1.5.0（[安装指南](https://developer.hashicorp.com/terraform/install)）
 2. **腾讯云 API 密钥**（[获取地址](https://console.cloud.tencent.com/cam/capi)）
 3. **kubectl**（[安装指南](https://kubernetes.io/docs/tasks/tools/)）
-4. **Helm** >= 3.x（[安装指南](https://helm.sh/docs/intro/install/)）
 
 ## 快速开始
 
@@ -44,42 +43,16 @@ export KUBECONFIG=~/.kube/config-openclaw
 kubectl get nodes
 ```
 
-### 4. 部署 Cookbook
+### 4. 体验完成后销毁资源
 
 ```bash
-# 创建 namespace 和 API Key Secret
-kubectl create namespace openclaw
-kubectl create secret generic openclaw-secrets \
-  --from-literal=OPENROUTER_API_KEY=sk-or-v1-xxx \
-  -n openclaw
-
-# 部署（从项目根目录执行）
-cd ..
-helm install cookbook ./charts/openclaw-cookbook/ \
-  --namespace openclaw \
-  --set secrets.existingSecret=openclaw-secrets
-
-# 等待就绪
-kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cookbook \
-  -n openclaw --timeout=180s
-
-# 通过 port-forward 访问 Gateway Control UI
-kubectl port-forward -n openclaw svc/cookbook-openclaw-cookbook-public 20000:20000
-# 然后在浏览器中打开 http://localhost:20000
-```
-
-### 5. 体验完成后销毁资源
-
-```bash
-# 先卸载 Helm Chart
-helm uninstall cookbook -n openclaw
-
-# 销毁所有云资源（避免持续计费）
 cd terraform
 terraform destroy
 ```
 
 > ⚠️ **重要**: 体验完成后务必执行 `terraform destroy`，否则云资源会持续产生费用。
+
+集群就绪后，回到 [项目主 README](../README.md) 继续部署 OpenClaw。
 
 ## 自定义配置
 
@@ -118,15 +91,15 @@ cp terraform.tfvars.example terraform.tfvars
 ## 架构说明
 
 ```
-Terraform 创建                           用户操作
-┌───────────────────┐                   ┌──────────────────┐
-│  VPC + Subnet     │                   │                  │
-│  Security Group   │──── kubeconfig ──→│  helm install    │
-│  TKE Cluster      │                   │  cookbook         │
-│  Serverless Pool  │                   │                  │
-└───────────────────┘                   └──────────────────┘
-     terraform apply                     kubectl / helm
-     terraform destroy                   helm uninstall
+Terraform 创建
+┌───────────────────┐
+│  VPC + Subnet     │
+│  Security Group   │──── kubeconfig ──→ kubectl get nodes ✓
+│  TKE Cluster      │
+│  Serverless Pool  │
+└───────────────────┘
+     terraform apply
+     terraform destroy
 ```
 
-Terraform 只负责基础设施（集群+网络），应用部署由用户通过 Helm 控制，两者完全解耦。
+Terraform 只负责基础设施（集群 + 网络），应用部署见 [项目主 README](../README.md)。

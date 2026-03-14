@@ -41,9 +41,32 @@ eip:
   chargeType: TRAFFIC_POSTPAID_BY_HOUR  # 按流量计费
 
 service:
-  type: ClusterIP
-  port: 20000
+  type: LoadBalancer              # LoadBalancer 暴露到公网
+  port: 443
   annotations: {}
+
+# ==================== Nginx HTTPS 反向代理 ====================
+nginx:
+  enabled: true
+  image:
+    repository: nginx
+    tag: 1.27-alpine
+    pullPolicy: IfNotPresent
+  httpsPort: 443
+  tls:
+    existingSecret: ""
+    autoGenerate: true
+    cert: ""
+    key: ""
+    commonName: "openclaw"
+    daysValid: 3650
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
 
 # ==================== Secret（API Keys）====================
 # 方式一（推荐）: 引用已存在的 Secret
@@ -110,6 +133,8 @@ istio:
     version: "1.24.6"
     image: "ccr.ccs.tencentyun.com/openclaw-cookbook/helm:3.17.1"
     uninstallOnDelete: false
+    repoRetries: 5
+    repoRetryDelay: 10
     pilot:
       resources:
         requests:

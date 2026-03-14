@@ -74,15 +74,14 @@ output "next_steps" {
        helm install cookbook ./charts/openclaw-cookbook/ \
          -f ./charts/openclaw-cookbook/values-minimal.yaml \
          --namespace openclaw --create-namespace \
-         --set secrets.env.API_KEY=sk-proj-xxx \
-         --set gateway.authToken=your-gateway-token \
          --set provider.name=openai \
          --set provider.baseUrl=https://api.openai.com/v1 \
-         --set provider.defaultModel=gpt-4o
-
-    4. 通过 port-forward 访问 Gateway Control UI:
-       kubectl port-forward -n openclaw svc/cookbook-openclaw-cookbook-public 20000:20000
-       # 然后在浏览器中打开 http://localhost:20000
+         --set secrets.env.API_KEY=sk-proj-xxx \
+         --set provider.defaultModel=gpt-4o \
+         --set gateway.authToken=your-gateway-token 
+    
+    4. 访问 Gateway Control UI（自签名证书，需点击"继续访问"）:
+       echo "https://$(kubectl get svc -n openclaw --field-selector spec.type=LoadBalancer -o jsonpath='{.items[0].status.loadBalancer.ingress[0].ip}')"
 
     5. 体验完成后销毁所有资源（避免持续计费）:
        helm uninstall cookbook -n openclaw

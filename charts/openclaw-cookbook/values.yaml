@@ -43,9 +43,56 @@ eip:
   chargeType: TRAFFIC_POSTPAID_BY_HOUR  # 按流量计费
 
 service:
-  type: ClusterIP
-  port: 20000
+  type: LoadBalancer              # LoadBalancer 暴露到公网（CLB 直连 Pod ENI）
+  port: 443                       # CLB 监听端口（HTTPS）
   annotations: {}
+
+# ==================== Nginx HTTPS 反向代理 ====================
+# OpenClaw Web Crypto API 强制要求 HTTPS 或 localhost，
+# 通过 Nginx sidecar 提供 TLS 终止 + WebSocket 支持。
+# 用户通过 https://<CLB-IP> 访问即可。
+#
+# TLS 证书:
+#   方式一（推荐）: 引用已存在的 Secret（类型 kubernetes.io/tls）
+#     nginx:
+#       tls:
+#         existingSecret: "my-tls-secret"
+#
+#   方式二: 自动生成自签名证书（开发/测试用）
+#     nginx:
+#       tls:
+#         autoGenerate: true
+#
+#   方式三: 直接在 values 中提供证书内容
+#     nginx:
+#       tls:
+#         cert: |
+#           -----BEGIN CERTIFICATE-----
+#           ...
+#         key: |
+#           -----BEGIN PRIVATE KEY-----
+#           ...
+nginx:
+  enabled: true
+  image:
+    repository: nginx
+    tag: 1.27-alpine
+    pullPolicy: IfNotPresent
+  httpsPort: 443                  # Nginx HTTPS 监听端口
+  tls:
+    existingSecret: ""            # 引用已有的 TLS Secret
+    autoGenerate: true            # 自动生成自签名证书（existingSecret 未设置时生效）
+    cert: ""                      # 手动提供证书 PEM
+    key: ""                       # 手动提供私钥 PEM
+    commonName: "openclaw"        # 自签名证书 CN
+    daysValid: 3650               # 自签名证书有效期（天）
+  resources:
+    requests:
+      cpu: 50m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
 
 # ==================== Secret（API Keys）====================
 # 方式一（推荐）: 引用已存在的 Secret
@@ -117,6 +164,8 @@ istio:
     version: "1.24.6"
     image: "ccr.ccs.tencentyun.com/openclaw-cookbook/helm:3.17.1"
     uninstallOnDelete: false        # 卸载应用时保留 Istio（其他应用可能依赖）
+    repoRetries: 5                  # helm repo add/update 失败重试次数
+    repoRetryDelay: 10              # 重试间隔（秒）
     pilot:
       resources:
         requests:
