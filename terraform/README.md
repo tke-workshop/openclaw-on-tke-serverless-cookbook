@@ -73,7 +73,7 @@ cp terraform.tfvars.example terraform.tfvars
 | `subnet_cidr` | `10.0.1.0/24` | 子网 CIDR |
 | `service_cidr` | `172.19.128.0/17` | 集群 Service CIDR |
 | `cluster_name` | `openclaw-cookbook` | 集群名称前缀 |
-| `cluster_version` | `1.30.1` | Kubernetes 版本 |
+| `cluster_version` | `1.34.1` | Kubernetes 版本 |
 | `cookbook_service_port` | `31234` | Cookbook 服务端口 |
 | `tags` | `project=openclaw-cookbook` | 资源标签 |
 

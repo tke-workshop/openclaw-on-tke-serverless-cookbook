@@ -8,8 +8,7 @@
     <a href="#-架构总览">架构总览</a> ·
     <a href="#-部署模式">部署模式</a> ·
     <a href="#-常见问题">FAQ</a> ·
-    <a href="./terraform/README.md">Terraform 文档</a> ·
-    <a href="./charts/openclaw-cookbook/README.md">Helm Chart 文档</a>
+    <a href="./terraform/README.md">Terraform 文档</a>
   </p>
 </p>
 
@@ -190,7 +189,7 @@ kubectl wait --for=condition=Ready pod -l app.kubernetes.io/instance=cookbook \
   -n openclaw --timeout=180s
 ```
 
-> 💡 更多 Provider 示例见 [Helm Chart README](./charts/openclaw-cookbook/README.md)。
+> 💡 更多 Provider 配置见 [values.yaml](./charts/openclaw-cookbook/values.yaml) 中的注释说明。
 
 ### 步骤五：访问 OpenClaw
 
@@ -257,8 +256,12 @@ helm install cookbook ./charts/openclaw-cookbook/ \
 ```bash
 helm install cookbook ./charts/openclaw-cookbook/ \
   -f ./charts/openclaw-cookbook/values-minimal.yaml \
-  --namespace openclaw \
-  --set secrets.existingSecret=openclaw-secrets
+  --namespace openclaw --create-namespace \
+  --set secrets.env.API_KEY="你的密钥" \
+  --set gateway.authToken="你的登录密码" \
+  --set provider.name=openai \
+  --set provider.baseUrl=https://api.openai.com/v1 \
+  --set provider.defaultModel=gpt-4o
 ```
 
 | 特性 | 状态 |
@@ -330,7 +333,7 @@ cp terraform.tfvars.example terraform.tfvars
 | `istio.enabled` | `false` | 启用 Istio 服务治理 |
 | `istio.install.enabled` | `false` | 自动安装 Istio 控制面 |
 
-完整参数说明见 [charts/openclaw-cookbook/README.md](./charts/openclaw-cookbook/README.md)。
+完整参数说明见 [values.yaml](./charts/openclaw-cookbook/values.yaml)。
 
 ---
 
