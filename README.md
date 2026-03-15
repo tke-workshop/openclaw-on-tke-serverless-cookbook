@@ -33,7 +33,7 @@
 ### 本 Cookbook 提供了什么？
 
 ```
-openclaw-on-tencentcloud-tke-serverless-cookbook/
+openclaw-on-tke-serverless-cookbook/
 ├── terraform/                  # 🏗️ 基础设施即代码 — 一键创建腾讯云集群
 │   ├── main.tf                 #    VPC + 子网 + 安全组 + TKE 集群 + 超级节点池
 │   ├── variables.tf            #    可配置参数
@@ -128,8 +128,8 @@ graph LR
 ### 步骤一：克隆仓库
 
 ```bash
-git clone https://github.com/tke-workshop/openclaw-on-tencentcloud-tke-serverless-cookbook.git
-cd openclaw-on-tencentcloud-tke-serverless-cookbook
+git clone https://github.com/tke-workshop/openclaw-on-tke-serverless-cookbook.git
+cd openclaw-on-tke-serverless-cookbook
 ```
 
 ### 步骤二：创建 TKE 集群

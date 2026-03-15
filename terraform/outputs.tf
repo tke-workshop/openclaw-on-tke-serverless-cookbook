@@ -87,7 +87,7 @@ output "next_steps" {
        kubectl get nodes
 
     3. 部署 cookbook（以 OpenAI 为例）:
-       cd .. # 确保回到 openclaw-on-tencentcloud-tke-serverless-cookbook 根目录
+       cd .. # 确保回到 openclaw-on-tke-serverless-cookbook 根目录
        helm install cookbook ./charts/openclaw-cookbook/ \
          -f ./charts/openclaw-cookbook/values-minimal.yaml \
          --namespace openclaw --create-namespace \
