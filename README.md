@@ -63,6 +63,7 @@ graph LR
     end
     subgraph VPC["VPC + 子网 + 安全组"]
       CLB["CLB<br/>负载均衡<br/>:443"]
+      NAT["NAT 网关<br/>+ EIP"]
       subgraph Pool["超级节点池"]
         subgraph Pod["OpenClaw Pod"]
           Envoy["Envoy<br/>Sidecar"]
@@ -84,7 +85,8 @@ graph LR
   CLB --> Nginx
   Nginx --> Gateway
   Gateway --> Envoy
-  Envoy -- "出站白名单" --> API
+  Envoy -- "出站白名单" --> NAT
+  NAT -- "公网出口" --> API
   Istiod -. "xDS 策略推送" .-> Envoy
 ```
 
@@ -148,7 +150,7 @@ terraform apply
 # 输入 "yes" 确认创建
 ```
 
-> 📋 **Terraform 会自动创建**：VPC → 子网 → 安全组 → TKE 集群 → 超级节点池 → 公网访问端点
+> 📋 **Terraform 会自动创建**：VPC → 子网 → 安全组 → NAT 网关 → TKE 集群 → 超级节点池 → 公网访问端点
 
 ### 步骤三：连接集群
 
@@ -269,12 +271,12 @@ helm install cookbook ./charts/openclaw-cookbook/ \
 | OpenClaw 网关 | ✅ 启用 |
 | Nginx HTTPS 反向代理 | ✅ 启用（自签名证书，自动 TLS 终止） |
 | 安全加固（非 root 运行） | ✅ 启用 |
-| EIP 公网 IP | ✅ 启用 |
+| NAT 网关公网出口 | ✅ 启用（Terraform 层创建） |
 | 镜像缓存 | ❌ 关闭 |
 | 数据持久化 | ❌ 关闭 |
 | Istio 服务治理 | ❌ 关闭 |
 
-> 💡 最简模式关闭了 Istio 和数据持久化等高级功能，但仍然通过公网 HTTPS 直接访问，适合快速体验。
+> 💡 最简模式关闭了 Istio 和数据持久化等高级功能，Pod 通过 NAT 网关访问公网，适合快速体验。
 
 ---
 
@@ -286,11 +288,12 @@ helm install cookbook ./charts/openclaw-cookbook/ \
 | 超级节点池 | **无 Pod 运行时不计费** | 按 CPU/内存实际用量 |
 | VPC + 子网 | 网络基础设施 | 免费 |
 | 安全组 | 网络策略 | 免费 |
+| NAT 网关 | Pod 公网出口 | ~0.5 元/小时 |
+| EIP（NAT 网关出口） | 按流量计费 | 按实际流量 |
 | CLB 负载均衡 | 部署应用后创建 | ~0.02 元/小时 |
-| EIP 弹性公网 IP | 默认模式启用 | 按流量计费 |
 | CBS 云硬盘 | 10Gi SSD | ~0.003 元/小时 |
 
-> 💡 **个人体验**建议使用最简模式，体验完毕后立即销毁资源，几乎不会产生费用。
+> 💡 **个人体验**建议使用最简模式，体验完毕后立即销毁资源。NAT 网关创建后即开始计费，请注意及时清理。
 
 ---
 
@@ -312,6 +315,7 @@ cp terraform.tfvars.example terraform.tfvars
 | `availability_zone` | `ap-guangzhou-6` | 可用区 |
 | `cluster_name` | `openclaw-cookbook` | 集群名称前缀 |
 | `cluster_version` | `1.34.1` | Kubernetes 版本 |
+| `nat_bandwidth_out` | `100` | NAT 网关 EIP 出带宽上限 (Mbps) |
 | `cookbook_service_port` | `31234` | 服务端口 |
 
 完整参数说明见 [terraform/README.md](./terraform/README.md)。
@@ -321,7 +325,7 @@ cp terraform.tfvars.example terraform.tfvars
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
 | `image.tag` | `latest` | 镜像版本 |
-| `eip.enabled` | `true` | 是否绑定公网 EIP |
+| `eip.enabled` | `false` | 是否绑定公网 EIP（默认通过 NAT 网关出网） |
 | `service.type` | `LoadBalancer` | Service 类型 |
 | `nginx.enabled` | `true` | 启用 Nginx HTTPS 反向代理 sidecar |
 | `nginx.tls.autoGenerate` | `true` | 自动生成自签名证书 |

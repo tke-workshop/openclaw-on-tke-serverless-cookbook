@@ -46,6 +46,26 @@ variable "cluster_version" {
   default     = "1.34.1"
 }
 
+# ==================== NAT 网关配置 ====================
+
+variable "nat_bandwidth_out" {
+  description = "NAT 网关 EIP 出带宽上限 (Mbps)"
+  type        = number
+  default     = 100
+}
+
+variable "nat_max_concurrent" {
+  description = "NAT 网关最大并发连接数（万）"
+  type        = number
+  default     = 1000000
+}
+
+variable "nat_eip_charge_type" {
+  description = "NAT 网关 EIP 计费方式"
+  type        = string
+  default     = "TRAFFIC_POSTPAID_BY_HOUR"
+}
+
 # ==================== 安全组配置 ====================
 
 variable "cookbook_service_port" {

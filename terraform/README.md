@@ -30,6 +30,7 @@ terraform apply
 Terraform 会自动创建以下资源：
 - VPC + 子网
 - 安全组（入站仅放行 cookbook 服务端口和 ICMP）
+- NAT 网关 + EIP + 路由表（Pod 公网出口）
 - TKE 集群（托管模式，VPC-CNI 网络）
 - 超级节点池（安全组已绑定，Pod 自动继承）
 
@@ -74,6 +75,9 @@ cp terraform.tfvars.example terraform.tfvars
 | `service_cidr` | `172.19.128.0/17` | 集群 Service CIDR |
 | `cluster_name` | `openclaw-cookbook` | 集群名称前缀 |
 | `cluster_version` | `1.34.1` | Kubernetes 版本 |
+| `nat_bandwidth_out` | `100` | NAT 网关 EIP 出带宽上限 (Mbps) |
+| `nat_max_concurrent` | `1000000` | NAT 网关最大并发连接数 |
+| `nat_eip_charge_type` | `TRAFFIC_POSTPAID_BY_HOUR` | NAT 网关 EIP 计费方式 |
 | `cookbook_service_port` | `31234` | Cookbook 服务端口 |
 | `tags` | `project=openclaw-cookbook` | 资源标签 |
 
@@ -83,21 +87,25 @@ cp terraform.tfvars.example terraform.tfvars
 |------|------|---------|
 | TKE 托管集群 | 标准托管 | 集群管理免费 |
 | 超级节点池 | 按 Pod 实际用量计费 | 按需（无 Pod 则不计费） |
+| NAT 网关 | 标准型 | ~0.5 元/小时 |
+| EIP（NAT 网关出口） | 按流量计费 | 按实际流量 |
 | VPC + 子网 | 标准配置 | 免费 |
 | 安全组 | 标准配置 | 免费 |
 
 > 超级节点池无 CVM 实例，仅按 Pod 实际使用的 CPU/内存资源计费，不部署 Pod 时不产生费用。
+> NAT 网关创建后即开始计费，体验完成后请及时销毁。
 
 ## 架构说明
 
 ```
 Terraform 创建
-┌───────────────────┐
-│  VPC + Subnet     │
-│  Security Group   │──── kubeconfig ──→ kubectl get nodes ✓
-│  TKE Cluster      │
-│  Serverless Pool  │
-└───────────────────┘
+┌──────────────────────────────┐
+│  VPC + Subnet                │
+│  Security Group              │
+│  NAT Gateway + EIP + Route   │──── kubeconfig ──→ kubectl get nodes ✓
+│  TKE Cluster                 │
+│  Serverless Pool             │
+└──────────────────────────────┘
      terraform apply
      terraform destroy
 ```

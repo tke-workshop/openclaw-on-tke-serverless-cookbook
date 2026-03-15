@@ -19,9 +19,7 @@ spec:
         sidecar.istio.io/inject: "true"
         {{- end }}
       annotations:
-        {{- if .Values.eip.enabled }}
-        eks.tke.cloud.tencent.com/eip-attributes: '{"InternetMaxBandwidthOut":{{ .Values.eip.bandwidthOut }},"InternetChargeType":"{{ .Values.eip.chargeType }}"}'
-        {{- end }}
+
         {{- if .Values.imageCache.enabled }}
         eks.tke.cloud.tencent.com/use-image-cache: "auto"
         {{- end }}

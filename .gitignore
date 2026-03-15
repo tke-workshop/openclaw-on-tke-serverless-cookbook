@@ -6,6 +6,8 @@ terraform/*.tfstate
 terraform/*.tfstate.*
 terraform/crash.log
 terraform/crash.*.log
+terraform/tfplan
+terraform/*.tfplan
 
 # 敏感变量文件
 terraform/terraform.tfvars
@@ -21,6 +23,15 @@ kubeconfig
 
 # ==================== Helm ====================
 charts/openclaw-cookbook/charts/*.tgz
+
+# ==================== 环境变量 / 敏感文件 ====================
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.p12
+*.pfx
 
 # ==================== IDE / 编辑器 ====================
 .vscode/

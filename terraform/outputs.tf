@@ -43,6 +43,23 @@ output "security_group_id_workload" {
   value       = tencentcloud_security_group.workload.id
 }
 
+# ==================== NAT 网关输出 ====================
+
+output "nat_gateway_id" {
+  description = "NAT 网关 ID"
+  value       = tencentcloud_nat_gateway.cookbook.id
+}
+
+output "nat_eip" {
+  description = "NAT 网关公网 IP（所有 Pod 的出口 IP）"
+  value       = tencentcloud_eip.nat.public_ip
+}
+
+output "route_table_id" {
+  description = "NAT 路由表 ID"
+  value       = tencentcloud_route_table.nat.id
+}
+
 # ==================== 超级节点池输出 ====================
 
 output "serverless_node_pool_id" {

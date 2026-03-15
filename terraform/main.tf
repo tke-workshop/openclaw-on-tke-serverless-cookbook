@@ -21,6 +21,7 @@ resource "tencentcloud_subnet" "cookbook" {
   vpc_id            = tencentcloud_vpc.cookbook.id
   cidr_block        = var.subnet_cidr
   availability_zone = var.availability_zone
+  route_table_id    = tencentcloud_route_table.nat.id
   tags              = var.tags
 }
 
@@ -29,6 +30,7 @@ resource "tencentcloud_subnet" "cookbook_gz7" {
   vpc_id            = tencentcloud_vpc.cookbook.id
   cidr_block        = "10.0.2.0/24"
   availability_zone = "ap-guangzhou-7"
+  route_table_id    = tencentcloud_route_table.nat.id
   tags              = var.tags
 }
 
@@ -127,6 +129,22 @@ resource "tencentcloud_security_group_rule_set" "workload" {
     description = "Allow cookbook service port"
   }
 
+  ingress {
+    action      = "ACCEPT"
+    cidr_block  = "0.0.0.0/0"
+    protocol    = "TCP"
+    port        = "443"
+    description = "Allow HTTPS from CLB (direct-access mode)"
+  }
+
+  ingress {
+    action      = "ACCEPT"
+    cidr_block  = "0.0.0.0/0"
+    protocol    = "TCP"
+    port        = "80"
+    description = "Allow HTTP from CLB (direct-access mode)"
+  }
+
   # --- 出站规则 ---
 
   egress {
@@ -186,114 +204,46 @@ resource "tencentcloud_cam_role_policy_attachment" "ipamd" {
   policy_id = data.tencentcloud_cam_policies.ipamd.policy_list[0].policy_id
 }
 
-# ==================== CAM 服务角色（TKE） ====================
-# TKE 服务角色 TKE_QCSRole 用于容器服务访问 CVM、CLB、CBS 等云资源
-# 超级节点 Pod 绑定 EIP 需要此角色拥有 EIP 操作权限
+# ==================== NAT 网关（Pod 公网出口） ====================
+# 通过 NAT 网关为集群内 Pod 提供公网访问能力（替代 Pod 直接绑定 EIP 方案）
+# 优势：所有 Pod 共享同一出口 IP，无需为每个 Pod 分配独立 EIP，成本更低、管理更简单
 
-# 先查询角色是否已存在（可能在控制台手动授权过）
-data "tencentcloud_cam_roles" "tke_existing" {
-  name = "TKE_QCSRole"
+# NAT 网关使用的 EIP
+resource "tencentcloud_eip" "nat" {
+  name                       = "${var.cluster_name}-nat-eip-${local.uid_suffix}"
+  internet_charge_type       = var.nat_eip_charge_type
+  internet_max_bandwidth_out = var.nat_bandwidth_out
+  type                       = "EIP"
+  tags                       = var.tags
+
+  lifecycle {
+    ignore_changes = [tags, internet_max_bandwidth_out]
+  }
 }
 
-locals {
-  tke_role_exists = length(data.tencentcloud_cam_roles.tke_existing.role_list) > 0
+# NAT 网关
+resource "tencentcloud_nat_gateway" "cookbook" {
+  name             = "${var.cluster_name}-nat-${local.uid_suffix}"
+  vpc_id           = tencentcloud_vpc.cookbook.id
+  bandwidth        = var.nat_bandwidth_out
+  max_concurrent   = var.nat_max_concurrent
+  assigned_eip_set = [tencentcloud_eip.nat.public_ip]
+  tags             = var.tags
 }
 
-# 仅在角色不存在时创建
-resource "tencentcloud_cam_role" "tke" {
-  count         = local.tke_role_exists ? 0 : 1
-  name          = "TKE_QCSRole"
-  console_login = false
-  description   = "腾讯云容器服务(TKE)对云资源的访问权限，含 CVM、CLB、CBS、EIP 等资源操作。"
-
-  document = jsonencode({
-    version = "2.0"
-    statement = [
-      {
-        action = "name/sts:AssumeRole"
-        effect = "allow"
-        principal = {
-          service = ["ccs.qcloud.com"]
-        }
-      }
-    ]
-  })
-
-  tags = var.tags
+# 路由表：将子网的公网流量指向 NAT 网关
+resource "tencentcloud_route_table" "nat" {
+  vpc_id = tencentcloud_vpc.cookbook.id
+  name   = "${var.cluster_name}-rt-nat-${local.uid_suffix}"
+  tags   = var.tags
 }
 
-# 查询预设策略 QcloudAccessForTKERole 的 policy_id
-data "tencentcloud_cam_policies" "tke" {
-  name = "QcloudAccessForTKERole"
-}
-
-# 仅在新创建角色时绑定预设策略
-resource "tencentcloud_cam_role_policy_attachment" "tke" {
-  count     = local.tke_role_exists ? 0 : 1
-  role_id   = tencentcloud_cam_role.tke[0].id
-  policy_id = data.tencentcloud_cam_policies.tke.policy_list[0].policy_id
-}
-
-# 自定义策略：授予 TKE 服务角色 EIP 操作权限（超级节点 Pod 绑定 EIP 所需）
-# 包含 EIP 管理 + Tag 读取（EIP 分配时需查询集群标签）
-
-# 先查询策略是否已存在（可能在之前的 apply 中已创建）
-data "tencentcloud_cam_policies" "tke_eip_existing" {
-  name = "TKEAccessForEIP-${local.uid_suffix}"
-}
-
-locals {
-  tke_eip_policy_exists = length(data.tencentcloud_cam_policies.tke_eip_existing.policy_list) > 0
-  tke_eip_policy_id     = local.tke_eip_policy_exists ? data.tencentcloud_cam_policies.tke_eip_existing.policy_list[0].policy_id : tencentcloud_cam_policy.tke_eip[0].id
-}
-
-# 仅在策略不存在时创建
-resource "tencentcloud_cam_policy" "tke_eip" {
-  count       = local.tke_eip_policy_exists ? 0 : 1
-  name        = "TKEAccessForEIP-${local.uid_suffix}"
-  description = "允许 TKE 服务角色为超级节点 Pod 分配和管理弹性公网 IP (EIP)，含标签查询权限"
-
-  document = jsonencode({
-    version = "2.0"
-    statement = [
-      {
-        effect = "allow"
-        action = [
-          "name/cvm:AllocateAddresses",
-          "name/cvm:AssociateAddress",
-          "name/cvm:DescribeAddresses",
-          "name/cvm:DisassociateAddress",
-          "name/cvm:ReleaseAddresses",
-          "name/cvm:DescribeAddressQuota",
-          "name/cvm:ModifyAddressAttribute",
-        ]
-        resource = ["*"]
-      },
-      {
-        effect = "allow"
-        action = [
-          "name/tag:GetResources",
-          "name/tag:GetResourceTags",
-          "name/tag:DescribeResourcesByTags",
-          "name/tag:GetTagKeys",
-          "name/tag:GetTagValues",
-        ]
-        resource = ["*"]
-      }
-    ]
-  })
-}
-
-# 将 EIP 策略绑定到 TKE_QCSRole（无论角色是新建还是已有）
-resource "tencentcloud_cam_role_policy_attachment" "tke_eip" {
-  role_id   = local.tke_role_exists ? data.tencentcloud_cam_roles.tke_existing.role_list[0].role_id : tencentcloud_cam_role.tke[0].id
-  policy_id = local.tke_eip_policy_id
-}
-
-# 将 EIP 策略同时绑定到 IPAMDofTKE_QCSRole（IPAMD 负责 Pod 网络资源分配，包括 EIP）
-resource "tencentcloud_cam_role_policy_attachment" "ipamd_eip" {
-  role_id   = local.ipamd_role_exists ? data.tencentcloud_cam_roles.ipamd_existing.role_list[0].role_id : tencentcloud_cam_role.ipamd[0].id
-  policy_id = local.tke_eip_policy_id
+resource "tencentcloud_route_table_entry" "nat_default" {
+  route_table_id         = tencentcloud_route_table.nat.id
+  destination_cidr_block = "0.0.0.0/0"
+  next_type              = "NAT"
+  next_hub               = tencentcloud_nat_gateway.cookbook.id
+  description            = "Default route to NAT Gateway for internet access"
 }
 
 # ==================== TKE 集群 ====================
@@ -322,11 +272,10 @@ resource "tencentcloud_kubernetes_cluster" "cookbook" {
   tags = var.tags
 
   # 确保 IPAMD 服务角色及策略就绪后再创建 VPC-CNI 模式集群
-  # 同时确保 TKE_QCSRole 及 EIP 策略就绪，以支持 Pod 绑定 EIP
+  # 同时确保 NAT 网关和路由表就绪，以支持 Pod 访问公网
   depends_on = [
     tencentcloud_cam_role_policy_attachment.ipamd,
-    tencentcloud_cam_role_policy_attachment.tke_eip,
-    tencentcloud_cam_role_policy_attachment.ipamd_eip,
+    tencentcloud_route_table_entry.nat_default,
   ]
 }
 

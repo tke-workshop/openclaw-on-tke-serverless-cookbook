@@ -31,6 +31,16 @@
 # Kubernetes 版本
 # cluster_version = "1.34.1"
 
+# ==================== NAT 网关配置 ====================
+# NAT 网关 EIP 出带宽上限 (Mbps)
+# nat_bandwidth_out = 100
+
+# NAT 网关最大并发连接数（万）
+# nat_max_concurrent = 1000000
+
+# NAT 网关 EIP 计费方式
+# nat_eip_charge_type = "TRAFFIC_POSTPAID_BY_HOUR"
+
 # ==================== 安全组配置 ====================
 # Cookbook 服务端口（安全组入站放行）
 # cookbook_service_port = 31234

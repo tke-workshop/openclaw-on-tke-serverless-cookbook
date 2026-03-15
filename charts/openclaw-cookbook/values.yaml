@@ -37,11 +37,6 @@ resources:
     memory: 2Gi
 
 # ==================== 网络 ====================
-eip:
-  enabled: true
-  bandwidthOut: 10              # 出带宽上限 (Mbps)
-  chargeType: TRAFFIC_POSTPAID_BY_HOUR  # 按流量计费
-
 service:
   type: LoadBalancer              # LoadBalancer 暴露到公网（CLB 直连 Pod ENI）
   port: 443                       # CLB 监听端口（HTTPS）

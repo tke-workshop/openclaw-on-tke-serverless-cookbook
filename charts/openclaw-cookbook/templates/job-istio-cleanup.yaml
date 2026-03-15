@@ -69,9 +69,7 @@ spec:
         app.kubernetes.io/name: {{ include "openclaw-cookbook.name" . }}-istio-cleanup
         app.kubernetes.io/instance: {{ .Release.Name }}
       annotations:
-        {{- if .Values.eip.enabled }}
-        eks.tke.cloud.tencent.com/eip-attributes: '{"InternetMaxBandwidthOut":{{ .Values.eip.bandwidthOut }},"InternetChargeType":"{{ .Values.eip.chargeType }}"}'
-        {{- end }}
+
     spec:
       serviceAccountName: {{ include "openclaw-cookbook.fullname" . }}-istio-cleanup
       restartPolicy: OnFailure
