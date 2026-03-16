@@ -97,14 +97,18 @@ gateway:
 # ==================== 第一层: 平台能力 ====================
 
 imageCache:
-  enabled: false
+  enabled: true
 
 storage:
   storageClass: cbs
   size: 10Gi
 
 dataPersistence:
-  enabled: false
+  enabled: true
+  duration: "168h"
+  disk:
+    size: 20
+    type: "SSD_CLOUD_PREMIUM"
 
 securityGroup:
   enabled: false
