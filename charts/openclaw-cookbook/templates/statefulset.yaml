@@ -47,11 +47,16 @@ spec:
               chown -R 1000:1000 /data
               {{- $configFile := "/config/openclaw.json" }}
               {{- $dataFile := "/data/openclaw.json" }}
-              cp {{ $configFile }} {{ $dataFile }}
-              {{- range $envKey, $placeholder := .Values.secrets.placeholders }}
-              sed -i "s|{{ $placeholder }}|${{ $envKey }}|g" {{ $dataFile }}
-              {{- end }}
-              chown 1000:1000 {{ $dataFile }}
+              if [ ! -f {{ $dataFile }} ]; then
+                echo "openclaw.json not found, initializing from configmap..."
+                cp {{ $configFile }} {{ $dataFile }}
+                {{- range $envKey, $placeholder := .Values.secrets.placeholders }}
+                sed -i "s|{{ $placeholder }}|${{ $envKey }}|g" {{ $dataFile }}
+                {{- end }}
+                chown 1000:1000 {{ $dataFile }}
+              else
+                echo "openclaw.json already exists, skipping initialization."
+              fi
           securityContext:
             runAsUser: 0
           envFrom:
