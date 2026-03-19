@@ -72,6 +72,11 @@ spec:
         - name: openclaw
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command:
+            - bash
+            - -c
+            - |
+              while true; do openclaw gateway run; echo "exited, restarting..."; sleep 1; done
           ports:
             - name: gateway
               containerPort: {{ .Values.gateway.port }}
