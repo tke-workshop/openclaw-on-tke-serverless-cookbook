@@ -117,6 +117,7 @@ spec:
               echo "=== Istio Bootstrap Start ==="
 
               ISTIO_VERSION="{{ .Values.istio.install.version | default "1.24.6" }}"
+              ISTIO_REPO_URL="{{ .Values.istio.install.repoURL | default "https://istio-release.storage.googleapis.com/charts" }}"
               ISTIO_NS="istio-system"
               TARGET_NS="{{ .Release.Namespace }}"
               MAX_RETRIES={{ .Values.istio.install.repoRetries | default 5 }}
@@ -141,7 +142,7 @@ spec:
               }
 
               # 添加 Istio Helm 仓库（带重试，解决 googleapis 偶现 EOF）
-              retry "helm repo add" helm repo add istio https://istio-release.storage.googleapis.com/charts
+              retry "helm repo add" helm repo add istio ${ISTIO_REPO_URL}
               retry "helm repo update" helm repo update istio
 
               # ---------- istio-base（CRD + 集群资源）----------

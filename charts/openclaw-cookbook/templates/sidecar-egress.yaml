@@ -24,6 +24,10 @@ spec:
         - "istio-system/*"
         # 本 namespace 内的服务（含 ServiceEntry 注册的外部域名）
         - "{{ .Release.Namespace }}/*"
+        {{- if .Values.istio.systemNamespace }}
+        # 系统 namespace（LiteLLM 模型网关等基础服务）
+        - "{{ .Values.istio.systemNamespace }}/*"
+        {{- end }}
   outboundTrafficPolicy:
     mode: REGISTRY_ONLY
 {{- end }}

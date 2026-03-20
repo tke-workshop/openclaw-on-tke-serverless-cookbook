@@ -71,7 +71,8 @@ data:
         "trustedProxies": ["127.0.0.1", "::1"],
         "controlUi": {
           "allowedOrigins": ["*"],
-          "dangerouslyDisableDeviceAuth": true
+          "dangerouslyDisableDeviceAuth": true,
+          "allowInsecureAuth": true
         },
         {{- else }}
         "bind": "lan",

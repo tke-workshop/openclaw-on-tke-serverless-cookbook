@@ -1,0 +1,26 @@
+{{- if .Values.istio.enabled }}
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: {{ include "openclaw-cookbook.fullname" . }}-ingress-allow
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "openclaw-cookbook.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "openclaw-cookbook.selectorLabels" . | nindent 6 }}
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            principals:
+              - "cluster.local/ns/istio-system/sa/istio-ingressgateway-service-account"
+      {{- if .Values.istio.systemNamespace }}
+    # Allow traffic from system namespace services (e.g. backend health checks).
+    - from:
+        - source:
+            namespaces:
+              - {{ .Values.istio.systemNamespace | quote }}
+      {{- end }}
+{{- end }}
