@@ -20,7 +20,7 @@ instance:
 # ==================== 基础镜像 ====================
 image:
   repository: ccr.ccs.tencentyun.com/openclaw-cookbook/openclaw
-  tag: main
+  tag: "2026.3.13-1"
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
