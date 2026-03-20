@@ -127,9 +127,12 @@ hibernate:
 
 istio:
   enabled: false
+  authorizationPolicy:
+    enabled: false
   install:
     enabled: false
     version: "1.24.6"
+    repoURL: "https://istio-release.storage.googleapis.com/charts"
     image: "ccr.ccs.tencentyun.com/openclaw-cookbook/helm:3.17.1"
     uninstallOnDelete: false
     repoRetries: 5

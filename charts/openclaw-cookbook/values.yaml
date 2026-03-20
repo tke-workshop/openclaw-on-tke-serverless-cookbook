@@ -155,6 +155,9 @@ hibernate:
 istio:
   enabled: true
   systemNamespace: ""               # operator 模式下注入系统 namespace，允许访问 LiteLLM 等基础服务
+  authorizationPolicy:
+    enabled: true                   # 入站授权策略：仅允许 Ingress Gateway 和 systemNamespace 的流量
+                                    # 开启后，kubectl port-forward 等直接访问方式将被 Istio 拒绝
   install:
     enabled: true                   # 自动安装 Istio 控制面
     version: "1.24.6"
