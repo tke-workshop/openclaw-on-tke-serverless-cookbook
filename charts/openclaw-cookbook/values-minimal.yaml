@@ -20,7 +20,7 @@ instance:
 # ==================== 基础镜像 ====================
 image:
   repository: ccr.ccs.tencentyun.com/openclaw-cookbook/openclaw
-  tag: "2026.3.13-1"
+  tag: main
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -36,7 +36,7 @@ resources:
 
 # ==================== 网络 ====================
 service:
-  type: LoadBalancer              # LoadBalancer 暴露到公网
+  type: ClusterIP                 # 默认集群内访问，需公网暴露时可覆盖为 LoadBalancer
   port: 443
   annotations: {}
 
@@ -97,14 +97,14 @@ gateway:
 # ==================== 第一层: 平台能力 ====================
 
 imageCache:
-  enabled: true
+  enabled: false
 
 storage:
   storageClass: cbs
   size: 10Gi
 
 dataPersistence:
-  enabled: true
+  enabled: false
   duration: "168h"
   disk:
     size: 20

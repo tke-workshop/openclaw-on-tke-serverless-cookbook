@@ -22,7 +22,7 @@ instance:
 # ==================== 基础镜像 ====================
 image:
   repository: ccr.ccs.tencentyun.com/openclaw-cookbook/openclaw
-  tag: "2026.3.13-1"
+  tag: main
   pullPolicy: IfNotPresent
 
 imagePullSecrets: []
@@ -38,14 +38,14 @@ resources:
 
 # ==================== 网络 ====================
 service:
-  type: LoadBalancer              # LoadBalancer 暴露到公网（CLB 直连 Pod ENI）
-  port: 443                       # CLB 监听端口（HTTPS）
+  type: ClusterIP                 # 默认集群内访问，需公网暴露时可覆盖为 LoadBalancer
+  port: 443
   annotations: {}
 
 # ==================== Nginx HTTPS 反向代理 ====================
 # OpenClaw Web Crypto API 强制要求 HTTPS 或 localhost，
 # 通过 Nginx sidecar 提供 TLS 终止 + WebSocket 支持。
-# 用户通过 https://<CLB-IP> 访问即可。
+# 集群内通过 Service DNS 访问，或 kubectl port-forward 后通过 localhost 访问。
 #
 # TLS 证书:
 #   方式一（推荐）: 引用已存在的 Secret（类型 kubernetes.io/tls）
@@ -123,14 +123,14 @@ gateway:
 # ==================== 第一层: 平台能力 ====================
 
 imageCache:
-  enabled: true
+  enabled: false
 
 storage:
   storageClass: cbs
   size: 10Gi
 
 dataPersistence:
-  enabled: true
+  enabled: false
   duration: "168h"
   disk:
     size: 20
@@ -154,9 +154,11 @@ hibernate:
 # --- Istio 服务治理（自动安装 + 启用）---
 istio:
   enabled: true
+  systemNamespace: ""               # operator 模式下注入系统 namespace，允许访问 LiteLLM 等基础服务
   install:
     enabled: true                   # 自动安装 Istio 控制面
     version: "1.24.6"
+    repoURL: "https://istio-release.storage.googleapis.com/charts"  # 可替换为镜像源
     image: "ccr.ccs.tencentyun.com/openclaw-cookbook/helm:3.17.1"
     uninstallOnDelete: false        # 卸载应用时保留 Istio（其他应用可能依赖）
     repoRetries: 5                  # helm repo add/update 失败重试次数
